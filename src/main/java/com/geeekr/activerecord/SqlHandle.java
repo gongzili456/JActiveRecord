@@ -3,7 +3,6 @@ package com.geeekr.activerecord;
 import java.io.Serializable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
-import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,29 +22,45 @@ public class SqlHandle {
 		return clazz;
 	}
 
-	public static SqlMod insertSql(Model model) {
-		List<Object> params = new ArrayList<Object>();
+	private static String tableName(Model model) {
 		Class<? extends Model> clazz = handle(model);
 		Table table = clazz.getAnnotation(Table.class);
 		String tableName = "";
 		if (table != null) {
 			tableName = table.name();
 		}
+		return tableName;
+	}
 
+	private static List<Field> fields(Model model) {
+		Class<? extends Model> clazz = handle(model);
 		Field[] fields = clazz.getDeclaredFields();
-		List<String> _fields = new ArrayList<String>();
+		List<Field> _fields = new ArrayList<Field>();
 		for (Field f : fields) {
 			if (Modifier.isStatic(f.getModifiers())) {
 				continue;
 			}
+			_fields.add(f);
+		}
+		return _fields;
+	}
+
+	public static SqlMod insertSql(Model model) {
+		List<Object> params = new ArrayList<Object>();
+		String tableName = tableName(model);
+
+		List<String> _fields = new ArrayList<String>();
+		List<Field> fields = fields(model);
+		for (Field f : fields) {
 			Id id = f.getAnnotation(Id.class);
 			if (id != null) {
 				continue;
 			}
+
 			Column column = f.getAnnotation(Column.class);
+
 			if (column != null) {
-				String colName = column.name();
-				_fields.add(colName);
+				_fields.add(column.name());
 			} else {
 				_fields.add(defaultName(f.getName()));
 			}
@@ -53,9 +68,7 @@ public class SqlHandle {
 			Object val = null;
 			try {
 				val = f.get(model);
-			} catch (IllegalArgumentException e) {
-				e.printStackTrace();
-			} catch (IllegalAccessException e) {
+			} catch (IllegalArgumentException | IllegalAccessException e) {
 				e.printStackTrace();
 			}
 			params.add(val);
@@ -74,10 +87,124 @@ public class SqlHandle {
 		}
 
 		SqlMod mod = new SqlMod();
-		mod.setSql(MessageFormat.format("INSERT INTO {0}({1}) VALUES({2})",
-				tableName, _fiel.toString(), _params.toString()));
+		mod.setSql(String.format("INSERT INTO %s(%s) VALUES(%s)", tableName,
+				_fiel.toString(), _params.toString()));
+		mod.setParams(params);
+		return mod;
+	}
+
+	public static SqlMod updateSql(Model model) {
+		List<Object> params = new ArrayList<Object>();
+		String tableName = tableName(model);
+		List<Field> fields = fields(model);
+		List<String> _fields = new ArrayList<String>();
+		Serializable idVal = 0;
+		String idName = null;
+		for (Field f : fields) {
+			Id id = f.getAnnotation(Id.class);
+			if (id != null) {
+				f.setAccessible(true);
+				try {
+					idVal = (Serializable) f.get(model);
+				} catch (IllegalArgumentException | IllegalAccessException e) {
+					e.printStackTrace();
+				}
+				Column column = f.getAnnotation(Column.class);
+				if (column != null) {
+					idName = column.name();
+				} else {
+					idName = defaultName(f.getName());
+				}
+				continue;
+			}
+			Column column = f.getAnnotation(Column.class);
+			if (column != null) {
+				_fields.add(column.name());
+			} else {
+				_fields.add(defaultName(f.getName()));
+			}
+			f.setAccessible(true);
+			Object val = null;
+			try {
+				val = f.get(model);
+			} catch (IllegalArgumentException | IllegalAccessException e) {
+				e.printStackTrace();
+			}
+			params.add(val);
+		}
+
+		StringBuilder values = new StringBuilder();
+		for (int i = 0; i < _fields.size(); i++) {
+			if (i != _fields.size() - 1) {
+				values.append(_fields.get(i) + "= ?, ");
+			} else {
+				values.append(_fields.get(i) + "= ?");
+			}
+		}
+
+		SqlMod mod = new SqlMod();
+		mod.setSql(String.format("UPDATE %s SET %s WHERE %s = %s", tableName,
+				values.toString(), idName, idVal.toString()));
 		mod.setParams(params);
 
+		return mod;
+	}
+
+	public static SqlMod deleteSql(Model model) {
+		String tableName = tableName(model);
+		List<Field> fields = fields(model);
+		String idName = null;
+		Serializable idVal = 0;
+		for (Field f : fields) {
+			Id id = f.getAnnotation(Id.class);
+			if (id != null) {
+
+				f.setAccessible(true);
+				try {
+					idVal = (Serializable) f.get(model);
+				} catch (IllegalArgumentException | IllegalAccessException e) {
+					e.printStackTrace();
+				}
+
+				Column column = f.getAnnotation(Column.class);
+				if (column != null) {
+					idName = column.name();
+				} else {
+					idName = defaultName(f.getName());
+				}
+				break;
+			}
+		}
+
+		SqlMod mod = new SqlMod();
+		mod.setSql(String.format("DELETE FROM %s WHERE %s = %s", tableName,
+				idName, idVal));
+		return mod;
+	}
+
+	public static <T> SqlMod queryOne(Class<T> clazz) {
+		Table table = clazz.getAnnotation(Table.class);
+		String tableName = "";
+		if (table != null) {
+			tableName = table.name();
+		}
+		Field[] fields = clazz.getDeclaredFields();
+		String idName = null;
+		for (Field f : fields) {
+			Id id = f.getAnnotation(Id.class);
+			if (id != null) {
+				Column column = f.getAnnotation(Column.class);
+				if (column != null) {
+					idName = column.name();
+				} else {
+					idName = defaultName(f.getName());
+				}
+				break;
+			}
+		}
+		SqlMod mod = new SqlMod();
+		mod.setSql(String.format("SELECT * FROM %s WHERE %s = ?", tableName,
+				idName));
 		return mod;
 	}
 
@@ -100,134 +227,5 @@ public class SqlHandle {
 			}
 		}
 		return result.toString().toLowerCase();
-	}
-
-	public static SqlMod updateSql(Model model) {
-		List<Object> params = new ArrayList<Object>();
-		Class<? extends Model> clazz = handle(model);
-		Table table = clazz.getAnnotation(Table.class);
-		String tableName = "";
-		if (table != null) {
-			tableName = table.name();
-		}
-
-		Field[] fields = clazz.getDeclaredFields();
-		List<String> _fields = new ArrayList<String>();
-		Serializable idVal = 0;
-		String idName = null;
-		for (Field f : fields) {
-			if (Modifier.isStatic(f.getModifiers())) {
-				continue;
-			}
-			Id id = f.getAnnotation(Id.class);
-			if (id != null) {
-				f.setAccessible(true);
-				try {
-					idVal = (Serializable) f.get(model);
-				} catch (IllegalArgumentException e) {
-					e.printStackTrace();
-				} catch (IllegalAccessException e) {
-					e.printStackTrace();
-				}
-				Column column = f.getAnnotation(Column.class);
-				if (column != null) {
-					idName = column.name();
-				} else {
-					idName = defaultName(f.getName());
-				}
-				break;
-			}
-			Column column = f.getAnnotation(Column.class);
-			if (column != null) {
-				String colName = column.name();
-				_fields.add(colName);
-			} else {
-				_fields.add(defaultName(f.getName()));
-			}
-			f.setAccessible(true);
-			Object val = null;
-			try {
-				val = f.get(model);
-			} catch (IllegalArgumentException e) {
-				e.printStackTrace();
-			} catch (IllegalAccessException e) {
-				e.printStackTrace();
-			}
-			params.add(val);
-		}
-
-		StringBuilder values = new StringBuilder();
-		for (int i = 0; i < _fields.size(); i++) {
-			if (i != _fields.size() - 1) {
-				values.append(_fields.get(i) + "= ?, ");
-			} else {
-				values.append(_fields.get(i) + "= ?");
-			}
-		}
-
-		SqlMod mod = new SqlMod();
-		mod.setSql(MessageFormat.format("UPDATE {0} SET {1} WHERE {2} = {3}",
-				tableName, values.toString(), idName, idVal.toString()));
-		mod.setParams(params);
-
-		return mod;
-	}
-
-	public static SqlMod deleteSql(Model model) {
-		Class<? extends Model> clazz = handle(model);
-		Table table = clazz.getAnnotation(Table.class);
-		String tableName = "";
-		if (table != null) {
-			tableName = table.name();
-		}
-
-		Field[] fields = clazz.getDeclaredFields();
-		Serializable idVal = 0;
-		String idName = null;
-		for (Field f : fields) {
-			Id id = f.getAnnotation(Id.class);
-			if (id != null) {
-
-				Column column = f.getAnnotation(Column.class);
-				if (column != null) {
-					idName = column.name();
-				} else {
-					idName = defaultName(f.getName());
-				}
-				break;
-			}
-		}
-
-		SqlMod mod = new SqlMod();
-		mod.setSql(MessageFormat.format("DELETE FROM {0} WHERE {1} = {2}",
-				tableName, idName, idVal));
-		return mod;
-	}
-
-	public static <T> SqlMod queryOne(Class<T> clazz) {
-		Table table = clazz.getAnnotation(Table.class);
-		String tableName = "";
-		if (table != null) {
-			tableName = table.name();
-		}
-		Field[] fields = clazz.getDeclaredFields();
-		String idName = null;
-		for (Field f : fields) {
-			Id id = f.getAnnotation(Id.class);
-			if (id != null) {
-
-				Column column = f.getAnnotation(Column.class);
-				if (column != null) {
-					idName = column.name();
-				} else {
-					idName = defaultName(f.getName());
-				}
-				break;
-			}
-		}
-		SqlMod mod = new SqlMod();
-		mod.setSql(MessageFormat.format("SELECT * FROM {0} WHERE {1} = ?",
-				tableName, idName));
-		return mod;
 	}
 }

@@ -2,10 +2,7 @@ package com.geeekr.activerecord;
 
 import java.io.Serializable;
 import java.sql.Connection;
-import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.List;
 
 import org.apache.commons.dbutils.BasicRowProcessor;
 import org.apache.commons.dbutils.QueryRunner;
@@ -30,6 +27,8 @@ public class DbServer {
 	 */
 	public void save(Model model) {
 
+		
+		
 	}
 
 	/**
@@ -37,15 +36,21 @@ public class DbServer {
 	 */
 	public void update(Model model) {
 		SqlMod sql = SqlHandle.updateSql(model);
+		QueryRunner runner = new QueryRunner();
+		Connection connection = null;
 		try {
-			PreparedStatement ps = conn().prepareStatement(sql.getSql());
-			List<Object> params = sql.getParams();
-			for (int i = 0; i < params.size(); i++) {
-				ps.setObject(i + 1, params.get(i));
-			}
-			ps.executeUpdate();
+			connection = conn();
+			runner.update(connection, sql.getSql(), sql.getParams().toArray());
 		} catch (SQLException e) {
 			e.printStackTrace();
+		} finally {
+			if (connection != null) {
+				try {
+					connection.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 
@@ -54,15 +59,23 @@ public class DbServer {
 	 */
 	public void insert(Model model) {
 		SqlMod sql = SqlHandle.insertSql(model);
+		System.out.println(sql.getSql());
+
+		QueryRunner runner = new QueryRunner();
+		Connection connection = null;
 		try {
-			PreparedStatement ps = conn().prepareStatement(sql.getSql());
-			List<Object> params = sql.getParams();
-			for (int i = 0; i < params.size(); i++) {
-				ps.setObject(i + 1, params.get(i));
-			}
-			ps.executeUpdate();
+			connection = conn();
+			runner.update(conn(), sql.getSql(), sql.getParams().toArray());
 		} catch (SQLException e) {
 			e.printStackTrace();
+		} finally {
+			if (connection != null) {
+				try {
+					connection.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 
@@ -71,11 +84,21 @@ public class DbServer {
 	 */
 	public void delete(Model model) {
 		SqlMod sql = SqlHandle.deleteSql(model);
+		QueryRunner runner = new QueryRunner();
+		Connection connection = null;
 		try {
-			Statement ps = conn().createStatement();
-			ps.executeUpdate(sql.getSql());
+			connection = conn();
+			runner.update(conn(), sql.getSql(), sql.getParams().toArray());
 		} catch (SQLException e) {
 			e.printStackTrace();
+		} finally {
+			if (connection != null) {
+				try {
+					connection.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 
@@ -83,11 +106,21 @@ public class DbServer {
 		SqlMod sql = SqlHandle.queryOne(clazz);
 		QueryRunner runner = new QueryRunner(DB.getDataSource());
 		T t = null;
+		Connection connection = null;
 		try {
+			connection = conn();
 			t = runner.query(sql.getSql(), new BeanHandler<T>(clazz,
 					new BasicRowProcessor(new CusBeanProcessor())), id);
 		} catch (SQLException e) {
 			e.printStackTrace();
+		} finally {
+			if (connection != null) {
+				try {
+					connection.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 		return t;
 	}

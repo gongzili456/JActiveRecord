@@ -26,13 +26,12 @@ public class TestAnnotation {
 	@Test
 	public void update() {
 		Post p = new Post();
-		p.setId(2);
+		p.setId(3);
 		p.setTitle("title");
 		p.setMarkdown("markdown");
 		p.setCreatedAt(new Date());
 		p.setCreatedBy(1);
 		p.setPage(false);
-		p.setSlug("slug");
 		p.setStatus("publish");
 
 		p.setHtml("<a>aaaa</a>");
@@ -48,7 +47,7 @@ public class TestAnnotation {
 		p.setCreatedAt(new Date());
 		p.setCreatedBy(1);
 		p.setPage(false);
-		p.setSlug("slug");
+		p.setSlug("slug 1");
 		p.setStatus("publish");
 
 		p.insert();
