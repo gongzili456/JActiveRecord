@@ -10,10 +10,10 @@
 
 ```java
 @Entity
-@Table(name = "posts")
+@Table(name = "users")
 public class User extends Model implements Serializable{
 
-  @Id
+  	@Id
 	@Column(name = "id", nullable = false, unique = true)
 	private Integer id;
 	
